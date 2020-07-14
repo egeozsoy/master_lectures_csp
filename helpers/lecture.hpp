@@ -7,15 +7,23 @@
 #ifndef MASTER_CSP_CPP_LECTURE_HPP
 #define MASTER_CSP_CPP_LECTURE_HPP
 
-class Lecture {
-    const std::string name;
+struct Lecture {
+    std::string name;
     int ec;
-    const std::string area;
+    std::string area;
     bool theo;
     double grade;
 public:
     Lecture(std::string _name, int _ec, std::string _area, bool _theo, double _grade = -1) :
             name(std::move(_name)), ec(_ec), area(std::move(_area)), theo(_theo), grade(_grade) {}
+
+    bool operator==(const Lecture &other) {
+        return this->name == other.name;
+    }
+
+    bool operator!=(const Lecture &other) {
+        return this->name != other.name;
+    }
 };
 
 #endif //MASTER_CSP_CPP_LECTURE_HPP

@@ -3,6 +3,7 @@
 #include <string>
 #include "helpers/lecture.hpp"
 #include "xlnt/xlnt.hpp"
+#include <chrono>  // for high_resolution_clock
 
 class ProblemWrapper {
 
@@ -12,6 +13,7 @@ class ProblemWrapper {
     static constexpr int normal_ec_limit = 8;
     std::vector<int> area_limit = {highest_ec_limit, normal_ec_limit, normal_ec_limit};
     static constexpr int max_allowed_lectures = 8;
+    // TODO should be a set
     std::vector<std::string> taken_lecture_names = {"Computer Vision I: Variational Methods",
                                                     "Computer Vision II: Multiple View Geometry",
                                                     "Natural Language Processing", "Introduction to Deep Learning",
@@ -48,6 +50,24 @@ class ProblemWrapper {
 public:
     ProblemWrapper() {
         auto lectures = create_lectures();
+        std::vector<Lecture> taken_lectures;
+        for (const auto &lecture : lectures) {
+            if (std::find(taken_lecture_names.cbegin(), taken_lecture_names.cend(), lecture.name) !=
+                taken_lecture_names.cend()) {
+                taken_lectures.push_back(lecture);
+            }
+        }
+        for (const auto &taken_lecture : taken_lectures) {
+            lectures.erase(std::remove(lectures.begin(), lectures.end(), taken_lecture), lectures.end());
+        }
+
+        std::vector<Lecture> additional_taken_lectures = {
+                Lecture("Seminar", 5, "None", false), Lecture("Practical Course", 10, "None", false), Lecture("IDP", 16, "None", false),
+                Lecture("Guided Research", 10, "None", false), Lecture("Thesis", 30, "None", false),
+                Lecture("Language", 6, "None", false)
+        };
+        taken_lectures.insert(taken_lectures.end(), additional_taken_lectures.begin(), additional_taken_lectures.end());
+        auto a = 1;
         // TODO taken lectures vector
         // TODO delete lectures
         // TODO start working on constraint library
@@ -57,7 +77,11 @@ public:
 };
 
 int main() {
+    auto start = std::chrono::high_resolution_clock::now();
     xlnt::workbook wb;
     auto problem_wrapper = ProblemWrapper();
+    auto finish = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = finish - start;
+    std::cout << "Elapsed time: " << elapsed.count() << " s\n";
     return 0;
 }
