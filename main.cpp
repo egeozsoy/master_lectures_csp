@@ -11,26 +11,6 @@
 using std::string;
 using std::vector;
 
-class complx {
-    double re, im;
-public:
-
-    // default constructor
-    complx() : re(0), im(0) {}
-
-    // copy constructor
-    complx(const complx &c) {
-        re = c.re;
-        im = c.im;
-    }
-
-    // constructor with default trailing argument
-    complx(double r, double i = 0.0) {
-        re = r;
-        im = i;
-    }
-};
-
 class ProblemWrapper {
 
     static constexpr int credit_limit = 120;
@@ -116,17 +96,12 @@ public:
 };
 
 int main() {
-    //create seperate repo for cpp_constraint
-//    auto start = std::chrono::high_resolution_clock::now();
+    // TODO create seperate repo for cpp_constraint
     auto problem_wrapper = ProblemWrapper();
     problem_wrapper.define_Problem();
 
-    auto a = 1;
 
-    // TODO start working on constraint library
-    // TODO we need a constraint header that introduces the Problem class
-
-
+    //    auto start = std::chrono::high_resolution_clock::now();
 //    auto finish = std::chrono::high_resolution_clock::now();
 //    std::chrono::duration<double> elapsed = finish - start;
 //    std::cout << "Elapsed time: " << elapsed.count() << " s\n";
