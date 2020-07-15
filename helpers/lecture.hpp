@@ -17,11 +17,11 @@ public:
     Lecture(std::string _name, int _ec, std::string _area, bool _theo, double _grade = -1) :
             name(std::move(_name)), ec(_ec), area(std::move(_area)), theo(_theo), grade(_grade) {}
 
-    bool operator==(const Lecture &other) {
+    bool operator==(const Lecture &other) const {
         return this->name == other.name;
     }
 
-    bool operator!=(const Lecture &other) {
+    bool operator!=(const Lecture &other) const {
         return this->name != other.name;
     }
 };

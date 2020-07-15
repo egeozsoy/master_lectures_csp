@@ -70,6 +70,12 @@
 				</MakeCommands>
 			</Target>
 		</Build>
+		<Unit filename="/Users/egeozsoy/Documents/Development/cpp_projects/master_csp_cpp/helpers/constraint.cpp">
+			<Option target="master_csp_cpp"/>
+		</Unit>
+		<Unit filename="/Users/egeozsoy/Documents/Development/cpp_projects/master_csp_cpp/helpers/constraint.hpp">
+			<Option target="master_csp_cpp"/>
+		</Unit>
 		<Unit filename="/Users/egeozsoy/Documents/Development/cpp_projects/master_csp_cpp/helpers/lecture.hpp">
 			<Option target="master_csp_cpp"/>
 		</Unit>
