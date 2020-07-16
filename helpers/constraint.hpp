@@ -33,6 +33,11 @@ private:
 };
 
 class Constraint {
+public:
+    Constraint() = default;
+
+    virtual int get_max_sum();
+
 private:
     void call(std::string variables, std::string domains, std::string assignments);
 
@@ -48,7 +53,15 @@ private:
 };
 
 class MaxSumConstraint : public Constraint {
+    int max_sum{-1};
     //TODO init with maxsum and multipliers
+public:
+    MaxSumConstraint() = default;
+
+    int get_max_sum() override;
+
+    explicit MaxSumConstraint(int m_sum) : max_sum(m_sum) {};
+
 private:
     void pre_process(std::string variables, std::string domains, std::string constraints, std::string vconstraints);
 
@@ -72,21 +85,23 @@ struct CustomHasher {
 template<typename T>
 class Problem {
     BacktrackingSolver solver = BacktrackingSolver();
-    std::vector<std::string> constraints;
     std::unordered_map<T, Domain, CustomHasher<T>> variables;
 
 public:
+    std::vector<std::pair<std::unique_ptr<Constraint>, std::vector<T>>> constraints;
+
     void add_variable(std::string variable, std::string domain);
 
     void add_variables(std::vector<T> vars, const std::vector<int> &domain);
+
+    void add_constraint(std::unique_ptr<Constraint> constraint, std::vector<T> vars);
+
 
 private:
     void reset();
 
     BacktrackingSolver get_solver();
 
-
-    void add_constraint(std::string constraint, std::string variables);
 
     std::string get_solution();
 
@@ -104,6 +119,12 @@ void Problem<T>::add_variables(std::vector<T> vars, const std::vector<int> &doma
         variables[var] = domain;
     }
     auto a = 1;
+}
+
+template<typename T>
+void Problem<T>::add_constraint(std::unique_ptr<Constraint> constraint_ptr, std::vector<T> vars) {
+    std::pair<std::unique_ptr<Constraint>, std::vector<T>> constraint_tuple(std::move(constraint_ptr), vars);
+    constraints.push_back(std::move(constraint_tuple));
 }
 
 #endif //MASTER_CSP_CPP_CONSTRAINT_HPP

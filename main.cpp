@@ -89,6 +89,9 @@ public:
 
     void define_Problem() {
         problem.add_variables(lectures, {0, 1});
+        std::unique_ptr<Constraint> constraint_ptr = std::make_unique<MaxSumConstraint>(5);
+        problem.add_constraint(std::move(constraint_ptr), lectures);
+        auto a = 1;
 //
     }
 
