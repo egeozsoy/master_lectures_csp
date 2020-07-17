@@ -1,4 +1,5 @@
 #include <iostream>
+#include <utility>
 #include <vector>
 #include <string>
 #include <numeric>
@@ -10,6 +11,28 @@
 
 using std::string;
 using std::vector;
+
+
+class AreaConstraint : public Constraint<Lecture> {
+    const std::shared_ptr<vector<Lecture>> lectures;
+public:
+    explicit AreaConstraint(std::shared_ptr<vector<Lecture>> lects) : lectures(std::move(lects)) {}; // TODO implement clone functions
+};
+
+class CreditConstraint : public Constraint<Lecture> {
+    const std::shared_ptr<vector<Lecture>> lectures;
+public:
+    explicit CreditConstraint(std::shared_ptr<vector<Lecture>> lects) : lectures(std::move(lects)) {};
+
+};
+
+class TheoConstraint : public Constraint<Lecture> {
+    const std::shared_ptr<vector<Lecture>> lectures;
+public:
+    explicit TheoConstraint(std::shared_ptr<vector<Lecture>> lects) : lectures(std::move(lects)) {};
+
+
+};
 
 class ProblemWrapper {
 
@@ -62,6 +85,7 @@ class ProblemWrapper {
 public:
     ProblemWrapper() {
         create_lectures();
+        taken_lectures.reserve(taken_lecture_names.size());
         for (const auto &lecture : lectures) {
             if (std::find(taken_lecture_names.cbegin(), taken_lecture_names.cend(), lecture.name) !=
                 taken_lecture_names.cend()) {
@@ -89,10 +113,22 @@ public:
 
     void define_Problem() {
         problem.add_variables(lectures, {0, 1});
-        std::unique_ptr<Constraint> constraint_ptr = std::make_unique<MaxSumConstraint>(5);
-        problem.add_constraint(std::move(constraint_ptr), lectures);
-        auto a = 1;
+        std::unique_ptr<Constraint<Lecture>> max_sum_constraint = std::make_unique<MaxSumConstraint<Lecture>>(5);
+//        auto lectures_ptr = std::make_shared<vector<Lecture>>(lectures);
+//        std::unique_ptr<Constraint> area_constraint = std::make_unique<AreaConstraint>(lectures_ptr);
+//        std::unique_ptr<Constraint> credit_constraint = std::make_unique<CreditConstraint>(lectures_ptr);
+//        std::unique_ptr<Constraint> theo_constraint = std::make_unique<TheoConstraint>(lectures_ptr);
+        problem.add_constraint(std::move(max_sum_constraint), lectures);
+//        problem.add_constraint(std::move(area_constraint), lectures);
+//        problem.add_constraint(std::move(credit_constraint), lectures);
+//        problem.add_constraint(std::move(theo_constraint), lectures);
+//        auto a = 1;
 //
+    }
+
+    void solve_problem() {
+        auto solutions = problem.get_solutions();
+        auto a = 1;
     }
 
 
@@ -102,7 +138,7 @@ int main() {
     // TODO create seperate repo for cpp_constraint
     auto problem_wrapper = ProblemWrapper();
     problem_wrapper.define_Problem();
-
+    problem_wrapper.solve_problem();
 
     //    auto start = std::chrono::high_resolution_clock::now();
 //    auto finish = std::chrono::high_resolution_clock::now();
