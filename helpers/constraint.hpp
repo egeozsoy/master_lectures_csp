@@ -197,20 +197,23 @@ std::string BacktrackingSolver<T>::get_solutions(ProblemArgs<T> problem_args) {
         std::vector<std::tuple<int, int, T>> lst;
         for (const auto &variable_pair : problem_args.domains) {
             lst.push_back(std::make_tuple(problem_args.processed_vconstraints[variable_pair.first].size(),
-                                          problem_args.domains[variable_pair.first].get_values().size(), variable_pair.first));
+                                          problem_args.domains[variable_pair.first].get_values().size(),
+                                          variable_pair.first));
         }
-        // Sort lst by first second and third values
+        // TODO test this well
+        std::sort(lst.begin(), lst.end(), [](const auto &lhs, const auto &rhs) {
+            if (std::get<0>(lhs) == std::get<0>(rhs)) { // Different sorting if the first values are same
+                if (std::get<1>(lhs) == std::get<1>(rhs)) { // Different sorting if the second values are also the same
+                    return std::get<2>(lhs).name < std::get<2>(rhs).name;
+                }
+                return std::get<1>(lhs) < std::get<1>(rhs);
+            }
+            return std::get<0>(lhs) < std::get<0>(rhs);
+        });
         auto a = 1;
-//        lst = [
-//        (-len(vconstraints[variable]), len(domains[variable]), variable)
-//        for variable in domains
-//        ]
+
     }
     /*
-
-            #
-
-            lst.sort()
             for item in lst:
                 if item[-1] not in assignments:
                     # Found unassigned variable
