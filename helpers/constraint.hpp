@@ -33,11 +33,12 @@ public:
         states.clear();
     }
 
+    void pop_state();
+
 private:
 
     void push_state();
 
-    void pop_state();
 
     void hide_value(std::string value);
 };
@@ -190,6 +191,7 @@ public:
 
 template<typename T>
 std::string BacktrackingSolver<T>::get_solutions(ProblemArgs<T> problem_args) {
+    std::vector<std::unordered_map<T, int, CustomHasher<T>>> solutions;
     std::unordered_map<T, int, CustomHasher<T>> assignments;
     std::vector<std::tuple<T, std::vector<int>, std::vector<Domain>>> queue;
     while (true) {
@@ -211,33 +213,57 @@ std::string BacktrackingSolver<T>::get_solutions(ProblemArgs<T> problem_args) {
             return std::get<0>(lhs) < std::get<0>(rhs);
         });
         auto a = 1;
-
-    }
-    /*
-            for item in lst:
-                if item[-1] not in assignments:
-                    # Found unassigned variable
-                    variable = item[-1]
-                    values = domains[variable][:]
-                    if forwardcheck:
-                        pushdomains = [
-                            domains[x]
-                            for x in domains
-                            if x not in assignments and x != variable
-                        ]
-                    else:
-                        pushdomains = None
-                    break
-            else:
-                # No unassigned variables. We've got a solution. Go back
-                # to last variable, if there's one.
-                yield assignments.copy()
-                if not queue:
+        std::vector<Domain> pushdomains;
+        bool unassigned_variables = false;
+        std::vector<int> values;
+        const T *variable_ptr = nullptr;
+        for (const auto &item : lst) {
+            variable_ptr = &(std::get<2>(item));
+            const auto &variable = *variable_ptr;
+            if (assignments.find(variable) == assignments.end()) { //if not found
+                values = problem_args.domains[variable].get_values();
+                pushdomains.clear();
+                for (const auto &domain_pair : problem_args.domains) {
+                    if (assignments.find(domain_pair.first) == assignments.end() && &domain_pair.first != &variable) { //TODO check this
+                        pushdomains.push_back(domain_pair.second);
+                    }
+                }
+                unassigned_variables = true;
+                break;
+            }
+        }
+        if (unassigned_variables) {
+            solutions.push_back(assignments);
+            /*
+             *if not queue:
                     return
                 variable, values, pushdomains = queue.pop()
                 if pushdomains:
                     for domain in pushdomains:
                         domain.popState()
+             */
+        }
+        while (true) {
+            if (values.empty()) {
+                const auto &variable = *variable_ptr; // TODO make sure it can't be nullptr
+                assignments.erase(variable);
+                while (!queue.empty()) {
+                    auto last_element = queue.pop_back();
+                    variable_ptr = &(std::get<0>(last_element));
+                    values = std::get<1>(last_element);
+                    pushdomains = std::get<2>(last_element);
+                    if (!pushdomains.empty()) {
+                        for (const auto &p_domain : pushdomains) {
+                            p_domain.pop_state();
+                        }
+                    }
+                }
+            }
+        }
+
+
+    }
+    /*
 
             while True:
                 # We have a variable. Do we have any values left?
