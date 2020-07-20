@@ -35,13 +35,28 @@ public:
 
     void pop_state();
 
+    void push_state() {
+        states.push_back(values.size());
+    }
+
 private:
-
-    void push_state();
-
 
     void hide_value(std::string value);
 };
+
+void Domain::pop_state() {
+    auto diff = states.back() - get_values().size();
+    states.pop_back();
+    auto ctr = diff;
+    for (auto i = hidden.rbegin(); i != hidden.rend(); ++i) {
+        if (ctr <= 0) {
+            break;
+        }
+        values.push_back(*i);
+        --ctr;
+    }
+    hidden.erase(hidden.end() - diff, hidden.end()); // TODO check this is correct
+}
 
 template<typename T>
 struct CustomHasher {
@@ -68,7 +83,7 @@ public:
 
     virtual bool call(std::vector<T> vars,
                       std::unordered_map<T, Domain, CustomHasher<T>> domains,
-                      std::pair<T, int> assignments);
+                      std::unordered_map<T, int, CustomHasher<T>> assignments, std::vector<Domain> pushback);
 
 private:
     void forward_check(std::string variables, std::string domains, std::string assignments, std::string vconstraints); // TODO maybe unassigned
@@ -93,7 +108,9 @@ void Constraint<T>::pre_process(std::vector<T> vars, std::unordered_map<T, Domai
         auto &variable = vars[0];
         auto &domain = domains[variable];
         for (const auto &value : domain.get_values()) {
-            if (!(this->call(vars, domains, std::pair<T, int>(variable, value)))) {
+            std::unordered_map<T, int, CustomHasher<T>> assignments;
+            assignments[variable] = value;
+            if (!(this->call(vars, domains, assignments, {}))) {
                 domain.remove_value(value);
             }
             // Delete constraint
@@ -108,7 +125,10 @@ void Constraint<T>::pre_process(std::vector<T> vars, std::unordered_map<T, Domai
 }
 
 template<typename T>
-bool Constraint<T>::call(std::vector<T> vars, std::unordered_map<T, Domain, CustomHasher<T>> domains, std::pair<T, int> assignments) {
+bool
+Constraint<T>::call(std::vector<T> vars, std::unordered_map<T, Domain, CustomHasher<T>> domains,
+                    std::unordered_map<T, int, CustomHasher<T>> assignments,
+                    std::vector<Domain> pushback) {
     return true;
 }
 
@@ -138,7 +158,7 @@ public:
 
     bool call(std::vector<T> vars,
               std::unordered_map<T, Domain, CustomHasher<T>> domains,
-              std::pair<T, int> assignments) override;
+              std::unordered_map<T, int, CustomHasher<T>> assignments, std::vector<Domain> pushback) override;
 
 };
 
@@ -170,7 +190,9 @@ void MaxSumConstraint<T>::pre_process(std::vector<T> vars, std::unordered_map<T,
 }
 
 template<typename T>
-bool MaxSumConstraint<T>::call(std::vector<T> vars, std::unordered_map<T, Domain, CustomHasher<T>> domains, std::pair<T, int> assignments) {
+bool MaxSumConstraint<T>::call(std::vector<T> vars, std::unordered_map<T, Domain, CustomHasher<T>> domains,
+                               std::unordered_map<T, int, CustomHasher<T>> assignments,
+                               std::vector<Domain> pushback) {
 //    Constraint<T>::call(vars, domains, assignments);
     auto d = 1;
     return true;
@@ -186,11 +208,11 @@ struct ProblemArgs {
 template<typename T>
 class BacktrackingSolver {
 public:
-    std::string get_solutions(ProblemArgs<T> problem_args);
+    std::vector<std::unordered_map<T, int, CustomHasher<T>>> get_solutions(ProblemArgs<T> problem_args);
 };
 
 template<typename T>
-std::string BacktrackingSolver<T>::get_solutions(ProblemArgs<T> problem_args) {
+std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::get_solutions(ProblemArgs<T> problem_args) {
     std::vector<std::unordered_map<T, int, CustomHasher<T>>> solutions;
     std::unordered_map<T, int, CustomHasher<T>> assignments;
     std::vector<std::tuple<T, std::vector<int>, std::vector<Domain>>> queue;
@@ -248,63 +270,57 @@ std::string BacktrackingSolver<T>::get_solutions(ProblemArgs<T> problem_args) {
                 const auto &variable = *variable_ptr; // TODO make sure it can't be nullptr
                 assignments.erase(variable);
                 while (!queue.empty()) {
-                    auto last_element = queue.pop_back();
+                    auto last_element = queue.back();
+                    queue.pop_back();
                     variable_ptr = &(std::get<0>(last_element));
                     values = std::get<1>(last_element);
                     pushdomains = std::get<2>(last_element);
                     if (!pushdomains.empty()) {
-                        for (const auto &p_domain : pushdomains) {
+                        for (auto &p_domain : pushdomains) {
                             p_domain.pop_state();
                         }
                     }
+                    if (!values.empty()) {
+                        break;
+                    }
+                    const auto &variable_new = *variable_ptr;
+                    assignments.erase(variable_new);
+                }
+//                if (queue.empty()){
+//                    return ;
+//                } TODO this might be necessary to avoid infinite loop
+            }
+            const auto &variable = *variable_ptr;
+            assignments[variable] = values.back();
+            values.pop_back();
+
+            if (!pushdomains.empty()) {
+                for (auto &p_domain : pushdomains) {
+                    p_domain.push_state();
                 }
             }
+            auto break_exit = false;
+            for (const auto &constraint_var_pair : problem_args.processed_vconstraints[variable]) {
+                if (!(constraint_var_pair.first->call(constraint_var_pair.second, problem_args.domains, assignments, pushdomains))) {
+                    //value is not good
+                    break_exit = true;
+                    break;
+                }
+            }
+            if (!break_exit) {
+                break;
+            }
+
+            if (!pushdomains.empty()) {
+                for (auto &p_domain : pushdomains) {
+                    p_domain.pop_state();
+                }
+            }
+
         }
-
-
+        queue.push_back(std::make_tuple(*variable_ptr, values, pushdomains));
     }
-    /*
-
-            while True:
-                # We have a variable. Do we have any values left?
-                if not values:
-                    # No. Go back to last variable, if there's one.
-                    del assignments[variable]
-                    while queue:
-                        variable, values, pushdomains = queue.pop()
-                        if pushdomains:
-                            for domain in pushdomains:
-                                domain.popState()
-                        if values:
-                            break
-                        del assignments[variable]
-                    else:
-                        return
-
-                # Got a value. Check it.
-                assignments[variable] = values.pop()
-
-                if pushdomains:
-                    for domain in pushdomains:
-                        domain.pushState()
-
-                for constraint, variables in vconstraints[variable]:
-                    if not constraint(variables, domains, assignments, pushdomains):
-                        # Value is not good.
-                        break
-                else:
-                    break
-
-                if pushdomains:
-                    for domain in pushdomains:
-                        domain.popState()
-
-            # Push state before looking for next variable.
-            queue.append((variable, values, pushdomains))
-
-        raise RuntimeError("Can't happen")
-     */
-    return std::string();
+    return solutions;
 }
 
 
@@ -400,7 +416,7 @@ template<typename T>
 std::string Problem<T>::get_solutions() {
     auto problem_args = get_args();
     // TODO do we need check for not domains?
-    solver.get_solutions(problem_args);
+    solver.get_solutions(problem_args); // TODO continue testing from here
     return "";
 //    domains, constraints, vconstraints = self._getArgs()
 //    if not domains:
