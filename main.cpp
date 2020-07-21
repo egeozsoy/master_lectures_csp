@@ -113,7 +113,7 @@ public:
 
     void define_Problem() {
         problem.add_variables(lectures, {0, 1});
-        std::unique_ptr<Constraint<Lecture>> max_sum_constraint = std::make_unique<MaxSumConstraint<Lecture>>(5);
+        std::unique_ptr<Constraint<Lecture>> max_sum_constraint = std::make_unique<MaxSumConstraint<Lecture>>(2);
 //        auto lectures_ptr = std::make_shared<vector<Lecture>>(lectures);
 //        std::unique_ptr<Constraint> area_constraint = std::make_unique<AreaConstraint>(lectures_ptr);
 //        std::unique_ptr<Constraint> credit_constraint = std::make_unique<CreditConstraint>(lectures_ptr);
@@ -128,7 +128,6 @@ public:
 
     void solve_problem() {
         auto solutions = problem.get_solutions();
-        auto a = 1;
     }
 
 
@@ -138,11 +137,10 @@ int main() {
     // TODO create seperate repo for cpp_constraint
     auto problem_wrapper = ProblemWrapper();
     problem_wrapper.define_Problem();
+    auto start = std::chrono::high_resolution_clock::now();
     problem_wrapper.solve_problem();
-
-    //    auto start = std::chrono::high_resolution_clock::now();
-//    auto finish = std::chrono::high_resolution_clock::now();
-//    std::chrono::duration<double> elapsed = finish - start;
-//    std::cout << "Elapsed time: " << elapsed.count() << " s\n";
+    auto finish = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = finish - start;
+    std::cout << "Elapsed time: " << elapsed.count() << " s\n";
     return 0;
 }

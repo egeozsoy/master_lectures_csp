@@ -12,6 +12,8 @@
 #include <unordered_map>
 #include "../helpers/lecture.hpp"
 
+
+//TODO refactor and move all non template functions to .cpp
 using Constraints =
 class Domain {
     std::vector<int> hidden;
@@ -28,7 +30,9 @@ public:
     explicit Domain(std::vector<int> vals) : values(std::move(vals)) {};
 
     void reset_state() {
-        values = hidden;
+        for (const auto &item : hidden) {
+            values.push_back(item);
+        }
         hidden.clear();
         states.clear();
     }
@@ -39,24 +43,15 @@ public:
         states.push_back(values.size());
     }
 
+    void hide_value(int value) {
+        remove_value(value);
+        hidden.push_back(value);
+    }
+
 private:
 
-    void hide_value(std::string value);
 };
 
-void Domain::pop_state() {
-    auto diff = states.back() - get_values().size();
-    states.pop_back();
-    auto ctr = diff;
-    for (auto i = hidden.rbegin(); i != hidden.rend(); ++i) {
-        if (ctr <= 0) {
-            break;
-        }
-        values.push_back(*i);
-        --ctr;
-    }
-    hidden.erase(hidden.end() - diff, hidden.end()); // TODO check this is correct
-}
 
 template<typename T>
 struct CustomHasher {
@@ -76,14 +71,14 @@ public:
 
     virtual void pre_process(
             std::vector<T> vars,
-            std::unordered_map<T, Domain, CustomHasher<T>> domains,
+            std::unordered_map<T, std::shared_ptr<Domain>, CustomHasher<T>> domains,
             std::vector<std::pair<std::shared_ptr<Constraint>, std::vector<T>>> constraints,
             std::unordered_map<T, std::vector<std::pair<std::shared_ptr<Constraint>, std::vector<T>>>, CustomHasher<T>> vconstraints
     );
 
     virtual bool call(std::vector<T> vars,
-                      std::unordered_map<T, Domain, CustomHasher<T>> domains,
-                      std::unordered_map<T, int, CustomHasher<T>> assignments, std::vector<Domain> pushback);
+                      std::unordered_map<T, std::shared_ptr<Domain>, CustomHasher<T>> domains,
+                      std::unordered_map<T, int, CustomHasher<T>> assignments);
 
 private:
     void forward_check(std::string variables, std::string domains, std::string assignments, std::string vconstraints); // TODO maybe unassigned
@@ -100,18 +95,18 @@ std::unique_ptr<Constraint<T>> Constraint<T>::clone() {
 }
 
 template<typename T>
-void Constraint<T>::pre_process(std::vector<T> vars, std::unordered_map<T, Domain, CustomHasher<T>> domains,
+void Constraint<T>::pre_process(std::vector<T> vars, std::unordered_map<T, std::shared_ptr<Domain>, CustomHasher<T>> domains,
                                 std::vector<std::pair<std::shared_ptr<Constraint>, std::vector<T>>> constraints,
                                 std::unordered_map<T, std::vector<std::pair<std::shared_ptr<Constraint>, std::vector<T>>>, CustomHasher<T>> vconstraints) {
 
     if (vars.size() == 1) {
         auto &variable = vars[0];
         auto &domain = domains[variable];
-        for (const auto &value : domain.get_values()) {
+        for (const auto &value : domain->get_values()) {
             std::unordered_map<T, int, CustomHasher<T>> assignments;
             assignments[variable] = value;
-            if (!(this->call(vars, domains, assignments, {}))) {
-                domain.remove_value(value);
+            if (!(this->call(vars, domains, assignments))) {
+                domain->remove_value(value);
             }
             // Delete constraint
             auto idx = std::find_if(constraints.begin(), constraints.end(),
@@ -126,9 +121,8 @@ void Constraint<T>::pre_process(std::vector<T> vars, std::unordered_map<T, Domai
 
 template<typename T>
 bool
-Constraint<T>::call(std::vector<T> vars, std::unordered_map<T, Domain, CustomHasher<T>> domains,
-                    std::unordered_map<T, int, CustomHasher<T>> assignments,
-                    std::vector<Domain> pushback) {
+Constraint<T>::call(std::vector<T> vars, std::unordered_map<T, std::shared_ptr<Domain>, CustomHasher<T>> domains,
+                    std::unordered_map<T, int, CustomHasher<T>> assignments) {
     return true;
 }
 
@@ -151,14 +145,14 @@ public:
 
     void pre_process(
             std::vector<T> vars,
-            std::unordered_map<T, Domain, CustomHasher<T>> domains,
+            std::unordered_map<T, std::shared_ptr<Domain>, CustomHasher<T>> domains,
             std::vector<std::pair<std::shared_ptr<Constraint<T>>, std::vector<T>>> constraints,
             std::unordered_map<T, std::vector<std::pair<std::shared_ptr<Constraint<T>>, std::vector<T>>>, CustomHasher<T>> vconstraints
     ) override;
 
     bool call(std::vector<T> vars,
-              std::unordered_map<T, Domain, CustomHasher<T>> domains,
-              std::unordered_map<T, int, CustomHasher<T>> assignments, std::vector<Domain> pushback) override;
+              std::unordered_map<T, std::shared_ptr<Domain>, CustomHasher<T>> domains,
+              std::unordered_map<T, int, CustomHasher<T>> assignments) override;
 
 };
 
@@ -173,7 +167,7 @@ std::unique_ptr<Constraint<T>> MaxSumConstraint<T>::clone() {
 }
 
 template<typename T>
-void MaxSumConstraint<T>::pre_process(std::vector<T> vars, std::unordered_map<T, Domain, CustomHasher<T>> domains,
+void MaxSumConstraint<T>::pre_process(std::vector<T> vars, std::unordered_map<T, std::shared_ptr<Domain>, CustomHasher<T>> domains,
                                       std::vector<std::pair<std::shared_ptr<Constraint<T>>, std::vector<T>>> constraints,
                                       std::unordered_map<T, std::vector<std::pair<std::shared_ptr<Constraint<T>>, std::vector<T>>>, CustomHasher<T>> vconstraints) {
     Constraint<T>::pre_process(vars, domains, constraints, vconstraints);
@@ -181,26 +175,46 @@ void MaxSumConstraint<T>::pre_process(std::vector<T> vars, std::unordered_map<T,
     // Eliminate any variable that would on its own be bigger than the limit
     for (const auto &variable : vars) {
         auto &domain = domains[variable];
-        for (const auto &value : domain.get_values()) {
+        for (const auto &value : domain->get_values()) {
             if (value > maxsum) {
-                domain.remove_value(value);
+                domain->remove_value(value);
             }
         }
     }
 }
 
 template<typename T>
-bool MaxSumConstraint<T>::call(std::vector<T> vars, std::unordered_map<T, Domain, CustomHasher<T>> domains,
-                               std::unordered_map<T, int, CustomHasher<T>> assignments,
-                               std::vector<Domain> pushback) {
-//    Constraint<T>::call(vars, domains, assignments);
-    auto d = 1;
+bool MaxSumConstraint<T>::call(std::vector<T> vars, std::unordered_map<T, std::shared_ptr<Domain>, CustomHasher<T>> domains,
+                               std::unordered_map<T, int, CustomHasher<T>> assignments) {
+    auto total_sum = 0;
+    for (const auto &variable : vars) {
+        if (assignments.find(variable) != assignments.end()) { // If variable in assignments
+            total_sum += assignments.at(variable);
+        }
+    }
+    if (total_sum > max_sum) {
+        return false;
+    }
+    //Forwardchecking
+    for (const auto &variable : vars) {
+        if (assignments.find(variable) == assignments.end()) { // If variable not in assignments
+            auto domain = domains.at(variable);
+            for (const auto &value : domain->get_values()) {
+                if (total_sum + value > max_sum) {
+                    domain->hide_value(value);
+                }
+            }
+            if (domain->get_values().empty()) {
+                return false;
+            }
+        }
+    }
     return true;
 }
 
 template<typename T>
 struct ProblemArgs {
-    std::unordered_map<T, Domain, CustomHasher<T>> domains;
+    std::unordered_map<T, std::shared_ptr<Domain>, CustomHasher<T>> domains; // TODO this should became a shared ptr
     std::vector<std::pair<std::shared_ptr<Constraint<T>>, std::vector<T>>> processed_constraints;
     std::unordered_map<T, std::vector<std::pair<std::shared_ptr<Constraint<T>>, std::vector<T>>>, CustomHasher<T>> processed_vconstraints;
 };
@@ -215,13 +229,13 @@ template<typename T>
 std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::get_solutions(ProblemArgs<T> problem_args) {
     std::vector<std::unordered_map<T, int, CustomHasher<T>>> solutions;
     std::unordered_map<T, int, CustomHasher<T>> assignments;
-    std::vector<std::tuple<T, std::vector<int>, std::vector<Domain>>> queue;
+    std::vector<std::tuple<T, std::vector<int>, std::vector<std::shared_ptr<Domain>>>> queue;
     while (true) {
         //Mix the Degree and Minimum Remaing Values (MRV) heuristics
         std::vector<std::tuple<int, int, T>> lst;
         for (const auto &variable_pair : problem_args.domains) {
-            lst.push_back(std::make_tuple(problem_args.processed_vconstraints[variable_pair.first].size(),
-                                          problem_args.domains[variable_pair.first].get_values().size(),
+            lst.push_back(std::make_tuple(-problem_args.processed_vconstraints[variable_pair.first].size(),
+                                          problem_args.domains[variable_pair.first]->get_values().size(),
                                           variable_pair.first));
         }
         // TODO test this well
@@ -234,36 +248,40 @@ std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::
             }
             return std::get<0>(lhs) < std::get<0>(rhs);
         });
-        auto a = 1;
-        std::vector<Domain> pushdomains;
-        bool unassigned_variables = false;
+        std::vector<std::shared_ptr<Domain>> pushdomains;
         std::vector<int> values;
+        bool unassigned_variables = false;
         const T *variable_ptr = nullptr;
         for (const auto &item : lst) {
             variable_ptr = &(std::get<2>(item));
             const auto &variable = *variable_ptr;
             if (assignments.find(variable) == assignments.end()) { //if not found
-                values = problem_args.domains[variable].get_values();
+                values = problem_args.domains[variable]->get_values();
                 pushdomains.clear();
                 for (const auto &domain_pair : problem_args.domains) {
-                    if (assignments.find(domain_pair.first) == assignments.end() && &domain_pair.first != &variable) { //TODO check this
-                        pushdomains.push_back(domain_pair.second);
+                    if (assignments.find(domain_pair.first) == assignments.end() && (domain_pair.first.name != variable.name)) { //TODO check this
+                        pushdomains.push_back(domain_pair.second); // TODO this shouldn't make a copy but be the same
                     }
                 }
                 unassigned_variables = true;
                 break;
             }
         }
-        if (unassigned_variables) {
+        if (!unassigned_variables) {
             solutions.push_back(assignments);
-            /*
-             *if not queue:
-                    return
-                variable, values, pushdomains = queue.pop()
-                if pushdomains:
-                    for domain in pushdomains:
-                        domain.popState()
-             */
+            if (queue.empty()) {
+                return solutions;
+            }
+            auto last_queue_element = queue.back();
+            queue.pop_back();
+            variable_ptr = &(std::get<0>(last_queue_element));
+            values = std::get<1>(last_queue_element);
+            pushdomains = std::get<2>(last_queue_element); // TODO debug this
+            if (!pushdomains.empty()) {
+                for (auto &p_domain : pushdomains) {
+                    p_domain->pop_state();
+                }
+            }
         }
         while (true) {
             if (values.empty()) {
@@ -274,10 +292,10 @@ std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::
                     queue.pop_back();
                     variable_ptr = &(std::get<0>(last_element));
                     values = std::get<1>(last_element);
-                    pushdomains = std::get<2>(last_element);
+                    pushdomains = std::get<2>(last_element); // TODO debug this
                     if (!pushdomains.empty()) {
                         for (auto &p_domain : pushdomains) {
-                            p_domain.pop_state();
+                            p_domain->pop_state();
                         }
                     }
                     if (!values.empty()) {
@@ -286,22 +304,23 @@ std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::
                     const auto &variable_new = *variable_ptr;
                     assignments.erase(variable_new);
                 }
-//                if (queue.empty()){
-//                    return ;
-//                } TODO this might be necessary to avoid infinite loop
+                if (queue.empty()) {
+                    return solutions;
+                }
             }
-            const auto &variable = *variable_ptr;
+            const auto &variable = *variable_ptr; // TODO this probably doesn't work correctly if values empty, make sure it is never the case
             assignments[variable] = values.back();
             values.pop_back();
 
             if (!pushdomains.empty()) {
                 for (auto &p_domain : pushdomains) {
-                    p_domain.push_state();
+                    p_domain->push_state();
                 }
             }
+            //TODO problem_args.domain is still different than pushback.domain. Fix unique_ptr solution we have right now, it probably should be a shared ptr
             auto break_exit = false;
             for (const auto &constraint_var_pair : problem_args.processed_vconstraints[variable]) {
-                if (!(constraint_var_pair.first->call(constraint_var_pair.second, problem_args.domains, assignments, pushdomains))) {
+                if (!(constraint_var_pair.first->call(constraint_var_pair.second, problem_args.domains, assignments))) {
                     //value is not good
                     break_exit = true;
                     break;
@@ -310,13 +329,11 @@ std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::
             if (!break_exit) {
                 break;
             }
-
             if (!pushdomains.empty()) {
                 for (auto &p_domain : pushdomains) {
-                    p_domain.pop_state();
+                    p_domain->pop_state();
                 }
             }
-
         }
         queue.push_back(std::make_tuple(*variable_ptr, values, pushdomains));
     }
@@ -327,7 +344,7 @@ std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::
 template<typename T>
 class Problem {
     BacktrackingSolver<T> solver = BacktrackingSolver<T>();
-    std::unordered_map<T, Domain, CustomHasher<T>> variables;
+    std::unordered_map<T, std::shared_ptr<Domain>, CustomHasher<T>> variables;
     std::vector<std::pair<std::unique_ptr<Constraint<T>>, std::vector<T>>> constraints;
 
 public:
@@ -338,7 +355,7 @@ public:
 
     void add_constraint(std::unique_ptr<Constraint<T>> constraint, std::vector<T> vars);
 
-    std::string get_solutions();
+    std::vector<std::unordered_map<T, int, CustomHasher<T>>> get_solutions();
 
 
 private:
@@ -360,7 +377,7 @@ template<typename T>
 void Problem<T>::add_variables(std::vector<T> vars, const std::vector<int> &domain_ints) {
     Domain domain(domain_ints);
     for (const auto &var : vars) {
-        variables[var] = domain;
+        variables[var] = std::make_shared<Domain>(domain);
     }
     auto a = 1; // TODO is this function finished?
 }
@@ -399,13 +416,13 @@ ProblemArgs<T> Problem<T>::get_args() {
         auto &vars = constraint_tuple.second;
         constraint->pre_process(vars, domains, processed_constraints, vconstraints);
     }
-    std::vector<Domain> vals;
+    std::vector<std::shared_ptr<Domain>> vals;
     vals.reserve(domains.size());
     for (const auto &kv : domains) {
         vals.push_back(kv.second);
     }
     for (auto &domain: vals) {
-        domain.reset_state();
+        domain->reset_state();
         // TODO do we need a if not domain?
     }
     ProblemArgs<T> problem_args{domains, processed_constraints, vconstraints};
@@ -413,15 +430,15 @@ ProblemArgs<T> Problem<T>::get_args() {
 }
 
 template<typename T>
-std::string Problem<T>::get_solutions() {
+std::vector<std::unordered_map<T, int, CustomHasher<T>>> Problem<T>::get_solutions() {
     auto problem_args = get_args();
     // TODO do we need check for not domains?
-    solver.get_solutions(problem_args); // TODO continue testing from here
-    return "";
+    // TODO continue testing from here
+    return solver.get_solutions(problem_args);
 //    domains, constraints, vconstraints = self._getArgs()
 //    if not domains:
 //    return []
-//    return self._solver.getSolutions(domains, constraints, vconstraints)
+//    return self._solver.getSolutions(std::shared_ptr<Domain>s, constraints, vconstraints)
 //    return "Solution";
 }
 
