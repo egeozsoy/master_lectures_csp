@@ -24,6 +24,10 @@ public:
     bool operator!=(const Lecture &other) const {
         return this->name != other.name;
     }
+
+    bool operator<(const Lecture &other) const {
+        return this->name < other.name;
+    }
 };
 
 #endif //MASTER_CSP_CPP_LECTURE_HPP
