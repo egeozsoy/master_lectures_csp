@@ -12,12 +12,14 @@ struct Lecture {
     int ec;
     std::string area;
     bool theo;
-    double grade;
+    float grade;
+    unsigned long hash;
 public:
     Lecture(std::string _name, int _ec, std::string _area, bool _theo, double _grade = -1) :
-            name(_name), ec(_ec), area(_area), theo(_theo), grade(_grade) {}
+            name(_name), ec(_ec), area(_area), theo(_theo), grade(_grade), hash(std::hash<std::string>()(_name)) {}
 
     explicit Lecture() = default;
+
     bool operator==(const Lecture &other) const {
         return this->name == other.name;
     }
