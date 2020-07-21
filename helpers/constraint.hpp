@@ -11,6 +11,8 @@
 #include <string>
 #include <unordered_map>
 #include "../helpers/lecture.hpp"
+#include <memory>
+#include <algorithm>
 
 
 using Constraints =
@@ -21,7 +23,7 @@ class Domain {
 public:
     Domain() = default;
 
-    std::vector<int> get_values() { return values; }
+    std::vector<int> &get_values() { return values; }
 
     void remove_value(int value) { values.erase(std::remove(values.begin(), values.end(), value), values.end()); }
 
@@ -212,35 +214,48 @@ struct ProblemArgs { // TODO continue here
 template<typename T>
 class BacktrackingSolver {
 public:
-    std::vector<std::unordered_map<T, int, CustomHasher<T>>> get_solutions(ProblemArgs<T> problem_args);
+    std::vector<std::unordered_map<T, int, CustomHasher<T>>> get_solutions(ProblemArgs<T> &problem_args);
 };
 
 template<typename T>
-std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::get_solutions(ProblemArgs<T> problem_args) {
+std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::get_solutions(ProblemArgs<T> &problem_args) {
+    int count = 0;
     std::vector<std::unordered_map<T, int, CustomHasher<T>>> solutions;
     std::unordered_map<T, int, CustomHasher<T>> assignments;
-    std::vector<std::tuple<T, std::vector<int>, std::vector<std::shared_ptr<Domain>>>> queue;
+    std::vector<std::tuple<std::unique_ptr<T>, std::vector<int>, std::vector<std::shared_ptr<Domain>>>> queue;
+    std::vector<std::tuple<int, int, std::unique_ptr<T>>> lst;
+    std::vector<std::shared_ptr<Domain>> pushdomains;
+    std::vector<int> values;
+
     while (true) {
         //Mix the Degree and Minimum Remaing Values (MRV) heuristics
-        std::vector<std::tuple<int, int, T>> lst;
+        lst.clear();
         for (const auto &variable_pair : problem_args.domains) {
-            lst.push_back(std::make_tuple(-problem_args.processed_vconstraints.at(variable_pair.first).size(),
-                                          problem_args.domains.at(variable_pair.first)->get_values().size(),
-                                          variable_pair.first));
+            lst.push_back(std::make_tuple<int, int, std::unique_ptr<T>>(-problem_args.processed_vconstraints.at(variable_pair.first).size(),
+                                                                        problem_args.domains.at(variable_pair.first)->get_values().size(),
+                                                                        std::make_unique<T>(variable_pair.first)));
         }
-        std::sort(lst.begin(), lst.end()); // Requires T to be sortable
-        std::vector<std::shared_ptr<Domain>> pushdomains;
-        std::vector<int> values;
+        // Requires T to be sortable
+        std::sort(lst.begin(), lst.end(), [](const auto &lhs, const auto &rhs) {
+            if (std::get<0>(lhs) == std::get<0>(rhs)) { // Different sorting if the first values are same
+                if (std::get<1>(lhs) == std::get<1>(rhs)) { // Different sorting if the second values are also the same
+                    return *std::get<2>(lhs).get() < *std::get<2>(rhs).get();
+                }
+                return std::get<1>(lhs) < std::get<1>(rhs);
+            }
+            return std::get<0>(lhs) < std::get<0>(rhs);
+        });
+        pushdomains.clear();
+        values.clear();
         bool unassigned_variables = false;
-        const T *variable_ptr = nullptr;
-        for (const auto &item : lst) {
-            variable_ptr = &(std::get<2>(item));
-            const auto &variable = *variable_ptr;
-            if (assignments.find(variable) == assignments.end()) { //if not found
-                values = problem_args.domains.at(variable)->get_values();
+        std::unique_ptr<T> variable_ptr;
+        for (auto &item : lst) {
+            variable_ptr = std::move(std::get<2>(item));
+            if (assignments.count(*variable_ptr.get()) == 0) { //if not found
+                values = problem_args.domains.at(*variable_ptr.get())->get_values();
                 pushdomains.clear();
                 for (const auto &domain_pair : problem_args.domains) {
-                    if (assignments.find(domain_pair.first) == assignments.end() && (domain_pair.first.name != variable.name)) {
+                    if (assignments.find(domain_pair.first) == assignments.end() && (domain_pair.first.name != variable_ptr->name)) {
                         pushdomains.push_back(domain_pair.second);
                     }
                 }
@@ -249,15 +264,29 @@ std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::
             }
         }
         if (!unassigned_variables) {
+//            std::vector<std::string> ones;
+//            for (const auto &item : assignments) {
+//                if (item.second == 1) {
+//                    ones.push_back(item.first.name);
+//                }
+//            }
+//            std::sort(ones.begin(), ones.end());
+//            std::cout << count << ": ";
+//            for (const auto &one : ones) {
+//                std::cout << one + " ||";
+//            }
+//            std::cout << std::endl;
+            count += 1;
+
             solutions.push_back(assignments);
             if (queue.empty()) {
                 return solutions;
             }
-            const auto last_queue_element = queue.back();
-            queue.pop_back();
-            variable_ptr = &(std::get<0>(last_queue_element));
+            auto &last_queue_element = queue.back();
+            variable_ptr = std::move(std::get<0>(last_queue_element));
             values = std::get<1>(last_queue_element);
             pushdomains = std::get<2>(last_queue_element);
+            queue.pop_back();
             if (!pushdomains.empty()) {
                 for (auto &p_domain : pushdomains) {
                     p_domain->pop_state();
@@ -266,31 +295,30 @@ std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::
         }
         while (true) {
             if (values.empty()) {
-                const auto &variable = *variable_ptr; // TODO make sure it can't be nullptr
-                assignments.erase(variable);
+                assignments.erase(*variable_ptr);
+                auto break_exit = false;
                 while (!queue.empty()) {
-                    const auto last_element = queue.back();
-                    queue.pop_back();
-                    variable_ptr = &(std::get<0>(last_element));
+                    auto &last_element = queue.back();
+                    variable_ptr = std::move(std::get<0>(last_element));
                     values = std::get<1>(last_element);
                     pushdomains = std::get<2>(last_element);
+                    queue.pop_back();
                     if (!pushdomains.empty()) {
                         for (auto &p_domain : pushdomains) {
                             p_domain->pop_state();
                         }
                     }
                     if (!values.empty()) {
+                        break_exit = true;
                         break;
                     }
-                    const auto &variable_new = *variable_ptr;
-                    assignments.erase(variable_new);
+                    assignments.erase(*variable_ptr);
                 }
-                if (queue.empty()) {
+                if (!break_exit) {
                     return solutions;
                 }
             }
-            const auto &variable = *variable_ptr; // TODO this probably doesn't work correctly if values empty, make sure it is never the case
-            assignments[variable] = values.back();
+            assignments[*variable_ptr] = values.back();
             values.pop_back();
 
             if (!pushdomains.empty()) {
@@ -299,7 +327,7 @@ std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::
                 }
             }
             auto break_exit = false;
-            for (const auto &constraint_var_pair : problem_args.processed_vconstraints.at(variable)) {
+            for (const auto &constraint_var_pair : problem_args.processed_vconstraints.at(*variable_ptr)) {
                 if (!(constraint_var_pair.first->call(constraint_var_pair.second, problem_args.domains, assignments))) {
                     //value is not good
                     break_exit = true;
@@ -315,7 +343,7 @@ std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::
                 }
             }
         }
-        queue.push_back(std::make_tuple(*variable_ptr, values, pushdomains));
+        queue.emplace_back(std::move(variable_ptr), values, pushdomains);
     }
     return solutions;
 }

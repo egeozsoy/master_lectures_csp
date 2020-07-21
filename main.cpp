@@ -113,7 +113,8 @@ public:
 
     void define_Problem() {
         problem.add_variables(lectures, {0, 1});
-        std::unique_ptr<Constraint<Lecture>> max_sum_constraint = std::make_unique<MaxSumConstraint<Lecture>>(3);
+        std::unique_ptr<Constraint<Lecture>> max_sum_constraint = std::make_unique<MaxSumConstraint<Lecture>>(1);
+        // TODO probably a bug, solution count is always 144
 //        auto lectures_ptr = std::make_shared<vector<Lecture>>(lectures);
 //        std::unique_ptr<Constraint> area_constraint = std::make_unique<AreaConstraint>(lectures_ptr);
 //        std::unique_ptr<Constraint> credit_constraint = std::make_unique<CreditConstraint>(lectures_ptr);
@@ -128,6 +129,7 @@ public:
 
     void solve_problem() {
         auto solutions = problem.get_solutions();
+        std::cout << solutions.size() << std::endl;
     }
 
 
