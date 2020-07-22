@@ -113,7 +113,7 @@ public:
 
     void define_Problem() {
         problem.add_variables(lectures, {0, 1});
-        std::unique_ptr<Constraint<Lecture>> max_sum_constraint = std::make_unique<MaxSumConstraint<Lecture>>(1);
+        std::unique_ptr<Constraint<Lecture>> max_sum_constraint = std::make_unique<MaxSumConstraint<Lecture>>(3);
 //        auto lectures_ptr = std::make_shared<vector<Lecture>>(lectures);
 //        std::unique_ptr<Constraint> area_constraint = std::make_unique<AreaConstraint>(lectures_ptr);
 //        std::unique_ptr<Constraint> credit_constraint = std::make_unique<CreditConstraint>(lectures_ptr);
