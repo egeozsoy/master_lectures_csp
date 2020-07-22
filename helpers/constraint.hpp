@@ -254,7 +254,7 @@ private:
                       std::vector<std::tuple<Proxy<T>, std::vector<int>, std::vector<std::shared_ptr<Domain>>>> &queue);
 
     std::vector<std::unordered_map<T, int, CustomHasher<T>>>
-    return_original_data_solution(std::vector<std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>>> solutions);
+    return_original_data_solution(const std::vector<std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>>> &solutions);
 };
 
 template<typename T>
@@ -314,14 +314,14 @@ BacktrackingSolver<T>::deal_values_empty(std::unordered_map<Proxy<T>, int, Custo
 
 template<typename T>
 std::vector<std::unordered_map<T, int, CustomHasher<T>>>
-BacktrackingSolver<T>::return_original_data_solution(std::vector<std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>>> solutions) {
+BacktrackingSolver<T>::return_original_data_solution(const std::vector<std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>>> &solutions) {
     std::vector<std::unordered_map<T, int, CustomHasher<T>>> original_solutions;
     for (const auto &solution : solutions) {
-        std::unordered_map<T, int, CustomHasher<T>> u_map;
+        auto &u_map = original_solutions.emplace_back();
+        u_map.reserve(solution.size());
         for (const auto &item : solution) {
             u_map[*item.first.t_pointer] = item.second;
         }
-        original_solutions.push_back(u_map);
     }
     return original_solutions;
 }
