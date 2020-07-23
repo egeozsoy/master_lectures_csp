@@ -59,10 +59,12 @@ template<typename T>
 struct Proxy {
     T *t_pointer; // TODO check that nothing funny happens with pointer
     int index;
-    unsigned long hash;
+/*    unsigned long hash; While it is possible to use a "proper" hash, such as from <T>, in the current
+ * configuration we can just rely on the index, as Proxy objects are generated only in one location.
+*/
 
 public:
-    Proxy(T *t_ptr, const int i, unsigned long hsh) : t_pointer(t_ptr), index(i), hash(hsh) {}
+    Proxy(T *t_ptr, const int i) : t_pointer(t_ptr), index(i) {}
 
     bool operator==(const Proxy &other) const {
         return this->index == other.index;
@@ -79,7 +81,7 @@ public:
 
 template<typename T>
 struct CustomProxyHasher {
-    size_t operator()(const Proxy<T> &t) const { return t.hash; }
+    size_t operator()(const Proxy<T> &t) const { return t.index; }
 };
 
 template<typename T>
@@ -338,7 +340,7 @@ std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::
     std::vector<Proxy<T>> proxies;
     int idx = 0;
     for (auto &original_data : original_datas) {
-        proxies.emplace_back(&original_data, idx, original_data.hash);
+        proxies.emplace_back(&original_data, idx);
         ++idx;
     }
     std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> domains;

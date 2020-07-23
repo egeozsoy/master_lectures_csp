@@ -60,7 +60,7 @@ class ProblemWrapper {
 
     auto create_lectures() {
         xlnt::workbook wb;
-        wb.load("tum_lectures.xlsx");
+        wb.load("../tum_lectures.xlsx");
         auto ws = wb.active_sheet();
         string current_area = "none";
         for (auto row : ws.rows(false)) {
@@ -144,5 +144,5 @@ int main() {
     std::chrono::duration<double> elapsed = finish - start;
     std::cout << "Elapsed time: " << elapsed.count() << " s\n";
     return 0;
-    // TODO at some point, the whole shouldn't be passed into constraint, but just an efficent representation of it
+    // TODO continue with implementing every functionality (mainly function constraints)
 }
