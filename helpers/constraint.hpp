@@ -57,7 +57,7 @@ struct CustomHasher {
 
 template<typename T>
 struct Proxy {
-    T *t_pointer; // TODO check that nothing funny happens with pointer
+    T *t_pointer;
     int index;
 /*    unsigned long hash; While it is possible to use a "proper" hash, such as from <T>, in the current
  * configuration we can just rely on the index, as Proxy objects are generated only in one location.
@@ -113,8 +113,12 @@ public:
                       const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &/*unused*/,
                       const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &/*unused*/) const;
 
-private:
-    void forward_check(std::string variables, std::string domains, std::string assignments, std::string vconstraints);
+    virtual bool forward_check(const std::vector<Proxy<T>> &vars,
+                               const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &domains,
+                               const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &assignments) const;
+
+    virtual bool func(const std::vector<int> &parms, const std::vector<Proxy<T>> &vars) const;
+
 };
 
 template<typename T>
@@ -154,6 +158,47 @@ Constraint<T>::call(const std::vector<Proxy<T>> &/*unused*/,
                     const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &/*unused*/,
                     const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &/*unused*/) const {
     return true; // TODO This call should never be called, maybe check this with assert
+}
+
+template<typename T>
+bool Constraint<T>::forward_check(const std::vector<Proxy<T>> &vars,
+                                  const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &domains,
+                                  const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &assignments) const {
+
+    std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> tmp_assignments = assignments; // TODO this makes copies but keeps function const, not sure if it is the best trade-off
+    // We represent unassigned always with -1
+    auto unassigned_variable = vars[0]; // As a placeholder
+    auto unassigned_variable_count = 0;
+    for (const auto &var : vars) {
+        if (tmp_assignments.count(var) == 0) {//if variable not in assignments
+            ++unassigned_variable_count;
+            unassigned_variable = var;
+            if (unassigned_variable_count > 1) {
+                break;
+            }
+        }
+    }
+    if (unassigned_variable_count == 1) {
+        auto &domain = domains.at(unassigned_variable);
+        if (!domain->get_values().empty()) {
+            for (const auto &value : domain->get_values()) {
+                tmp_assignments[unassigned_variable] = value;
+                if (!call(vars, domains, tmp_assignments)) {
+                    domain->hide_value(value);
+                }
+            }
+            tmp_assignments.erase(unassigned_variable);
+        }
+        if (domain->get_values().empty()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+template<typename T>
+bool Constraint<T>::func(const std::vector<int> &/*unused*/, const std::vector<Proxy<T>> &/*unused*/) const {
+    return true;
 }
 
 template<typename T>
@@ -232,6 +277,52 @@ bool MaxSumConstraint<T>::call(const std::vector<Proxy<T>> &vars,
     }
     return true;
 }
+
+template<typename T>
+class FunctionConstraint : public Constraint<T> {
+public:
+    std::unique_ptr<Constraint<T>> clone() override;
+
+    bool call(const std::vector<Proxy<T>> &vars,
+              const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &domains,
+              const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &assignments) const override;
+
+    bool func(const std::vector<int> &parms, const std::vector<Proxy<T>> &vars) const override;
+
+private:
+};
+
+template<typename T>
+std::unique_ptr<Constraint<T>> FunctionConstraint<T>::clone() {
+    return std::make_unique<FunctionConstraint>(*this);
+}
+
+template<typename T>
+bool FunctionConstraint<T>::call(const std::vector<Proxy<T>> &vars,
+                                 const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &domains,
+                                 const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &assignments) const {
+
+    std::vector<int> parms;
+    for (const auto &item : vars) {
+        if (assignments.count(item) > 0) {
+            parms.push_back(assignments.at(item));
+        } else {
+            parms.push_back(-1);
+        }
+    }
+    auto missing = std::count(parms.begin(), parms.end(), -1);
+    if (missing > 0) {
+        return (missing != 1) || (this->forward_check(vars, domains, assignments)); // TODO maybe make forward checking optionally like in python?
+    }
+    return func(parms, vars);
+
+}
+
+template<typename T>
+bool FunctionConstraint<T>::func(const std::vector<int> &/*unused*/, const std::vector<Proxy<T>> &/*unused*/) const {
+    return true;
+}
+
 
 template<typename T>
 struct ProblemArgs {

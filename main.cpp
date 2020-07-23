@@ -14,17 +14,54 @@ using std::vector;
 
 
 class AreaConstraint : public Constraint<Lecture> {
-    const std::shared_ptr<vector<Lecture>> lectures;
+    static constexpr auto credit_constraint = 120;
 public:
-    explicit AreaConstraint(std::shared_ptr<vector<Lecture>> lects) : lectures(std::move(lects)) {}; // TODO implement clone functions
+    std::unique_ptr<Constraint<Lecture>> clone() override;
+
+    bool func(const std::vector<int> &parms, const std::vector<Proxy<Lecture>> &vars) const override;
 };
 
-class CreditConstraint : public Constraint<Lecture> {
-    const std::shared_ptr<vector<Lecture>> lectures;
+std::unique_ptr<Constraint<Lecture>> AreaConstraint::clone() {
+    return std::make_unique<AreaConstraint>(*this);
+}
+
+bool AreaConstraint::func(const std::vector<int> &parms, const std::vector<Proxy<Lecture>> &vars) const {
+    // TODO make this an actual area constraint
+    int total_sum = 0; // TODO consider existing credits as well
+    for (size_t i = 0; i < parms.size(); ++i) {
+        if (parms[i] == 1) {
+            total_sum += vars[i].t_pointer->ec;
+        }
+    }
+    return total_sum >= credit_constraint;
+}
+
+class CreditConstraint : public FunctionConstraint<Lecture> {
+    static constexpr auto credit_constraint = 120;
+    int existing_credits;
 public:
-    explicit CreditConstraint(std::shared_ptr<vector<Lecture>> lects) : lectures(std::move(lects)) {};
+    explicit CreditConstraint(int existing_ec) : existing_credits(existing_ec) {};
+
+    std::unique_ptr<Constraint<Lecture>> clone() override;
+
+    bool func(const std::vector<int> &parms, const std::vector<Proxy<Lecture>> &vars) const override;
 
 };
+
+std::unique_ptr<Constraint<Lecture>> CreditConstraint::clone() {
+    return std::make_unique<CreditConstraint>(*this);
+}
+
+bool CreditConstraint::func(const vector<int> &parms, const vector<Proxy<Lecture>> &vars) const {
+    int total_sum = existing_credits;
+    for (size_t i = 0; i < parms.size(); ++i) {
+        if (parms[i] == 1) {
+            total_sum += vars[i].t_pointer->ec;
+        }
+    }
+    return total_sum >= credit_constraint;
+}
+
 
 class TheoConstraint : public Constraint<Lecture> {
     const std::shared_ptr<vector<Lecture>> lectures;
@@ -113,16 +150,14 @@ public:
 
     void define_Problem() {
         problem.add_variables(lectures, {0, 1});
-        std::unique_ptr<Constraint<Lecture>> max_sum_constraint = std::make_unique<MaxSumConstraint<Lecture>>(3);
-//        auto lectures_ptr = std::make_shared<vector<Lecture>>(lectures);
-//        std::unique_ptr<Constraint> area_constraint = std::make_unique<AreaConstraint>(lectures_ptr);
-//        std::unique_ptr<Constraint> credit_constraint = std::make_unique<CreditConstraint>(lectures_ptr);
+        std::unique_ptr<Constraint<Lecture>> max_sum_constraint = std::make_unique<MaxSumConstraint<Lecture>>(2);
+//        std::unique_ptr<Constraint<Lecture>> area_constraint = std::make_unique<AreaConstraint>();
+        std::unique_ptr<Constraint<Lecture>> credit_constraint = std::make_unique<CreditConstraint>(existing_credits);
 //        std::unique_ptr<Constraint> theo_constraint = std::make_unique<TheoConstraint>(lectures_ptr);
         problem.add_constraint(std::move(max_sum_constraint), lectures);
 //        problem.add_constraint(std::move(area_constraint), lectures);
-//        problem.add_constraint(std::move(credit_constraint), lectures);
+        problem.add_constraint(std::move(credit_constraint), lectures);
 //        problem.add_constraint(std::move(theo_constraint), lectures);
-//        auto a = 1;
 //
     }
 
