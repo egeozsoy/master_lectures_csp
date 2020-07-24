@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <numeric>
+#include <unordered_set>
 #include "helpers/lecture.hpp"
 #include "helpers/constraint.hpp"
 
@@ -13,12 +14,21 @@ using std::string;
 using std::vector;
 
 
-class AreaConstraint : public Constraint<Lecture> {
-    static constexpr auto credit_constraint = 120;
+class AreaConstraint : public FunctionConstraint<Lecture> {
+    std::unordered_map<string, int> taken_areas;
+    std::unordered_set<string> preferred_areas;
+    static constexpr int highest_ec_limit = 18;
+    static constexpr int normal_ec_limit = 8;
 public:
+    explicit AreaConstraint(const vector<Lecture> &taken_lectures, const vector<string> &p_areas) : preferred_areas(p_areas.begin(), p_areas.end()) {
+        for (const auto &item : taken_lectures) {
+            taken_areas[item.area] += item.ec;
+        }
+    };
+
     std::unique_ptr<Constraint<Lecture>> clone() override;
 
-    bool func(const std::vector<int> &parms, const std::vector<Proxy<Lecture>> &vars) const override;
+    [[nodiscard]] bool func(const std::vector<int> &parms, const std::vector<Proxy<Lecture>> &vars) const override;
 };
 
 std::unique_ptr<Constraint<Lecture>> AreaConstraint::clone() {
@@ -26,14 +36,26 @@ std::unique_ptr<Constraint<Lecture>> AreaConstraint::clone() {
 }
 
 bool AreaConstraint::func(const std::vector<int> &parms, const std::vector<Proxy<Lecture>> &vars) const {
-    // TODO make this an actual area constraint
-    int total_sum = 0; // TODO consider existing credits as well
+    std::unordered_map<string, int> areas = taken_areas; // TODO test that this doesn't modify taken_areas
     for (size_t i = 0; i < parms.size(); ++i) {
         if (parms[i] == 1) {
-            total_sum += vars[i].t_pointer->ec;
+            areas[vars[i].t_pointer->area] += vars[i].t_pointer->ec;
         }
     }
-    return total_sum >= credit_constraint;
+    if (areas.count("None") > 0) {
+        areas.erase("None");
+    }
+    std::vector<int> values;
+    for (const auto &item : areas) {
+        if (preferred_areas.empty() || preferred_areas.count(item.first) > 0) {
+            values.push_back(item.second);
+        }
+    } // TODO test this
+    if (values.size() < 3) {
+        return false;
+    }
+    std::sort(values.begin(), values.end(), std::greater<>());
+    return values[0] >= highest_ec_limit && values[1] >= normal_ec_limit && values[2] >= normal_ec_limit;
 }
 
 class CreditConstraint : public FunctionConstraint<Lecture> {
@@ -44,7 +66,7 @@ public:
 
     std::unique_ptr<Constraint<Lecture>> clone() override;
 
-    bool func(const std::vector<int> &parms, const std::vector<Proxy<Lecture>> &vars) const override;
+    [[nodiscard]] bool func(const std::vector<int> &parms, const std::vector<Proxy<Lecture>> &vars) const override;
 
 };
 
@@ -63,23 +85,36 @@ bool CreditConstraint::func(const vector<int> &parms, const vector<Proxy<Lecture
 }
 
 
-class TheoConstraint : public Constraint<Lecture> {
-    const std::shared_ptr<vector<Lecture>> lectures;
+class TheoConstraint : public FunctionConstraint<Lecture> {
+    static constexpr int theo_limit = 10;
+    int existing_theo_credits;
 public:
-    explicit TheoConstraint(std::shared_ptr<vector<Lecture>> lects) : lectures(std::move(lects)) {};
+    explicit TheoConstraint(int existing_theo_ec) : existing_theo_credits(existing_theo_ec) {};
 
+    std::unique_ptr<Constraint<Lecture>> clone() override;
+
+    [[nodiscard]] bool func(const std::vector<int> &parms, const std::vector<Proxy<Lecture>> &vars) const override;
 
 };
 
+std::unique_ptr<Constraint<Lecture>> TheoConstraint::clone() {
+    return std::make_unique<TheoConstraint>(*this);
+}
+
+bool TheoConstraint::func(const vector<int> &parms, const vector<Proxy<Lecture>> &vars) const {
+    int total_sum = existing_theo_credits;
+    for (size_t i = 0; i < parms.size(); ++i) {
+        if (parms[i] == 1 && vars[i].t_pointer->theo) {
+            total_sum += vars[i].t_pointer->ec;
+        }
+    }
+    return total_sum >= theo_limit;
+}
+
+
 class ProblemWrapper {
 
-    static constexpr int credit_limit = 120;
-    static constexpr int theo_limit = 10;
-    static constexpr int highest_ec_limit = 18;
-    static constexpr int normal_ec_limit = 8;
-    vector<int> area_limit = {highest_ec_limit, normal_ec_limit, normal_ec_limit};
-    static constexpr int max_allowed_lectures = 8;
-    // TODO should be a set
+    static constexpr int max_allowed_lectures = 2;
     vector<string> taken_lecture_names = {"Computer Vision I: Variational Methods",
                                           "Computer Vision II: Multiple View Geometry",
                                           "Natural Language Processing", "Introduction to Deep Learning",
@@ -150,23 +185,20 @@ public:
 
     void define_Problem() {
         problem.add_variables(lectures, {0, 1});
-        std::unique_ptr<Constraint<Lecture>> max_sum_constraint = std::make_unique<MaxSumConstraint<Lecture>>(2);
-//        std::unique_ptr<Constraint<Lecture>> area_constraint = std::make_unique<AreaConstraint>();
+        std::unique_ptr<Constraint<Lecture>> max_sum_constraint = std::make_unique<MaxSumConstraint<Lecture>>(max_allowed_lectures);
+        std::unique_ptr<Constraint<Lecture>> area_constraint = std::make_unique<AreaConstraint>(taken_lectures, preferred_areas);
         std::unique_ptr<Constraint<Lecture>> credit_constraint = std::make_unique<CreditConstraint>(existing_credits);
-//        std::unique_ptr<Constraint> theo_constraint = std::make_unique<TheoConstraint>(lectures_ptr);
+        std::unique_ptr<Constraint<Lecture>> theo_constraint = std::make_unique<TheoConstraint>(existing_theo_credits);
         problem.add_constraint(std::move(max_sum_constraint), lectures);
-//        problem.add_constraint(std::move(area_constraint), lectures);
+        problem.add_constraint(std::move(area_constraint), lectures);
         problem.add_constraint(std::move(credit_constraint), lectures);
-//        problem.add_constraint(std::move(theo_constraint), lectures);
-//
+        problem.add_constraint(std::move(theo_constraint), lectures);
     }
 
     void solve_problem() {
         auto solutions = problem.get_solutions();
         std::cout << solutions.size() << std::endl;
     }
-
-
 };
 
 int main() {
@@ -179,5 +211,4 @@ int main() {
     std::chrono::duration<double> elapsed = finish - start;
     std::cout << "Elapsed time: " << elapsed.count() << " s\n";
     return 0;
-    // TODO continue with implementing every functionality (mainly function constraints)
 }

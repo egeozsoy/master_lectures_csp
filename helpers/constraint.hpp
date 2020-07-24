@@ -37,7 +37,19 @@ public:
         states.clear();
     }
 
-    void pop_state();
+    void pop_state() {
+        auto diff = states.back() - get_values().size();
+        states.pop_back();
+        auto ctr = diff;
+        for (auto i = hidden.rbegin(); i != hidden.rend(); ++i) {
+            if (ctr <= 0) {
+                break;
+            }
+            values.push_back(*i);
+            --ctr;
+        }
+        hidden.erase(hidden.end() - diff, hidden.end());
+    }
 
     void push_state() {
         states.push_back(values.size());
@@ -144,7 +156,7 @@ void Constraint<T>::pre_process(const std::vector<Proxy<T>> &vars,
             // Delete constraint
             auto idx = std::find_if(constraints.begin(), constraints.end(),
                                     [this](auto constraint_pair) { return &(*(constraint_pair.first)) == this; });
-            constraints.erase(idx); // TODO test this with more than 1 constraint
+            constraints.erase(idx);
             auto v_idx = std::find_if(vconstraints.at(variable).begin(), vconstraints.at(variable).end(),
                                       [this](auto constraint_pair) { return &(*(constraint_pair.first)) == this; });
             vconstraints[variable].erase(v_idx);
@@ -157,7 +169,7 @@ bool
 Constraint<T>::call(const std::vector<Proxy<T>> &/*unused*/,
                     const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &/*unused*/,
                     const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &/*unused*/) const {
-    return true; // TODO This call should never be called, maybe check this with assert
+    throw std::logic_error("This function shouldn't be called");
 }
 
 template<typename T>
@@ -165,7 +177,7 @@ bool Constraint<T>::forward_check(const std::vector<Proxy<T>> &vars,
                                   const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &domains,
                                   const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &assignments) const {
 
-    std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> tmp_assignments = assignments; // TODO this makes copies but keeps function const, not sure if it is the best trade-off
+    std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> tmp_assignments = assignments; // This makes copies but keeps function const, not sure if it is the best trade-off
     // We represent unassigned always with -1
     auto unassigned_variable = vars[0]; // As a placeholder
     auto unassigned_variable_count = 0;
@@ -198,7 +210,7 @@ bool Constraint<T>::forward_check(const std::vector<Proxy<T>> &vars,
 
 template<typename T>
 bool Constraint<T>::func(const std::vector<int> &/*unused*/, const std::vector<Proxy<T>> &/*unused*/) const {
-    return true;
+    throw std::logic_error("This function shouldn't be called");
 }
 
 template<typename T>
@@ -312,7 +324,7 @@ bool FunctionConstraint<T>::call(const std::vector<Proxy<T>> &vars,
     }
     auto missing = std::count(parms.begin(), parms.end(), -1);
     if (missing > 0) {
-        return (missing != 1) || (this->forward_check(vars, domains, assignments)); // TODO maybe make forward checking optionally like in python?
+        return (missing != 1) || (this->forward_check(vars, domains, assignments)); // maybe make forward checking optional
     }
     return func(parms, vars);
 
@@ -320,7 +332,7 @@ bool FunctionConstraint<T>::call(const std::vector<Proxy<T>> &vars,
 
 template<typename T>
 bool FunctionConstraint<T>::func(const std::vector<int> &/*unused*/, const std::vector<Proxy<T>> &/*unused*/) const {
-    return true;
+    throw std::logic_error("This function shouldn't be called");
 }
 
 
@@ -477,18 +489,6 @@ std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::
         auto unassigned_variables = std::get<2>(pushback_domains_tpl);
 
         if (!unassigned_variables) {
-//            std::vector<std::string> ones;
-//            for (const auto &item : assignments) {
-//                if (item.second == 1) {
-//                    ones.push_back(item.first.name);
-//                }
-//            }
-//            std::sort(ones.begin(), ones.end());
-//            std::cout << count << ": ";
-//            for (const auto &one : ones) {
-//                std::cout << one + " ||";
-//            }
-//            std::cout << std::endl;
             count += 1;
 
             solutions.push_back(assignments);
@@ -515,7 +515,7 @@ std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::
                 pushdomains = std::get<2>(deal_tpl);
                 auto break_exit = std::get<3>(deal_tpl);
                 if (!break_exit) {
-                    return return_original_data_solution(solutions);;
+                    return return_original_data_solution(solutions);
                 }
             }
             assignments[variable] = values.back();
@@ -545,7 +545,7 @@ std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::
         }
         queue.emplace_back(variable, values, pushdomains);
     }
-    return return_original_data_solution(solutions);;
+    return return_original_data_solution(solutions);
 }
 
 template<typename T>
@@ -555,9 +555,6 @@ class Problem {
     std::vector<std::pair<std::unique_ptr<Constraint<T>>, std::vector<T>>> constraints;
 
 public:
-
-    void add_variable(std::string variable, std::string domain);
-
     void add_variables(const std::vector<T> &vars, const std::vector<int> &domain);
 
     void add_constraint(std::unique_ptr<Constraint<T>> constraint, const std::vector<T> &vars);
@@ -566,16 +563,6 @@ public:
 
 
 private:
-    void reset();
-
-
-    BacktrackingSolver<T> get_solver();
-
-
-    std::string get_solution();
-
-
-    std::string get_solution_iter();
 
     ProblemArgs<T> get_args();
 };
@@ -586,7 +573,6 @@ void Problem<T>::add_variables(const std::vector<T> &vars, const std::vector<int
     for (const auto &var : vars) {
         variables[var] = std::make_shared<Domain>(domain);
     }
-    // TODO is this function finished?
 }
 
 template<typename T>
@@ -598,7 +584,6 @@ void Problem<T>::add_constraint(std::unique_ptr<Constraint<T>> constraint_ptr, c
 
 template<typename T>
 ProblemArgs<T> Problem<T>::get_args() {
-    // TODO Replicate the python code
     auto domains = variables; // Create a copy of variables
     std::vector<std::pair<std::shared_ptr<Constraint<T>>, std::vector<T>>> processed_constraints;
     processed_constraints.reserve(constraints.size());
@@ -617,11 +602,6 @@ ProblemArgs<T> Problem<T>::get_args() {
             vconstraints[variable].push_back(constraint_tuple);
         }
     }
-//    for (const auto &constraint_tuple : processed_constraints) {
-//        auto &constraint = constraint_tuple.first;
-//        auto &vars = constraint_tuple.second;
-//        constraint->pre_process(vars, domains, processed_constraints, vconstraints);
-//    }
     std::vector<std::shared_ptr<Domain>> vals;
     vals.reserve(domains.size());
     for (const auto &kv : domains) {

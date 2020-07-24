@@ -1,0 +1,12 @@
+//            std::vector<std::string> ones;
+//            for (const auto &item : assignments) {
+//                if (item.second == 1) {
+//                    ones.push_back(item.first.name);
+//                }
+//            }
+//            std::sort(ones.begin(), ones.end());
+//            std::cout << count << ": ";
+//            for (const auto &one : ones) {
+//                std::cout << one + " ||";
+//            }
+//            std::cout << std::endl;
