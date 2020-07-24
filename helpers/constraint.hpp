@@ -10,7 +10,6 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
-#include "../helpers/lecture.hpp"
 #include <memory>
 #include <algorithm>
 

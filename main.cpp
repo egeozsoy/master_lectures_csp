@@ -114,7 +114,7 @@ bool TheoConstraint::func(const vector<int> &parms, const vector<Proxy<Lecture>>
 
 class ProblemWrapper {
 
-    static constexpr int max_allowed_lectures = 2;
+    static constexpr int max_allowed_lectures = 3;
     vector<string> taken_lecture_names = {"Computer Vision I: Variational Methods",
                                           "Computer Vision II: Multiple View Geometry",
                                           "Natural Language Processing", "Introduction to Deep Learning",
@@ -195,18 +195,69 @@ public:
         problem.add_constraint(std::move(theo_constraint), lectures);
     }
 
-    void solve_problem() {
+    vector<std::unordered_map<Lecture, int, CustomHasher<Lecture>>> solve_problem() {
         auto solutions = problem.get_solutions();
         std::cout << solutions.size() << std::endl;
+        return solutions;
+    }
+
+    static int get_credits_for_solution(const std::unordered_map<Lecture, int, CustomHasher<Lecture>> &solution) {
+        auto total_ec = 0;
+        for (const auto &item : solution) {
+            if (item.second == 1) {
+                total_ec += item.first.ec;
+            }
+        }
+        return total_ec;
+    }
+
+    struct SolutionWithEc {
+        std::unordered_map<Lecture, int, CustomHasher<Lecture>> solution;
+        int ec;
+    };
+
+    static vector<std::unordered_map<Lecture, int, CustomHasher<Lecture>>>
+    sort_solutions(const vector<std::unordered_map<Lecture, int, CustomHasher<Lecture>>> &solutions) {
+        vector<SolutionWithEc> solutions_with_ec;
+        solutions_with_ec.reserve(solutions.size());
+        for (const auto &solution : solutions) {
+            solutions_with_ec.push_back(SolutionWithEc{solution, get_credits_for_solution(solution)});
+        }
+
+        std::sort(solutions_with_ec.begin(), solutions_with_ec.end(), [](const auto &i, const auto &j) { return i.ec < j.ec; });
+
+        vector<std::unordered_map<Lecture, int, CustomHasher<Lecture>>> sorted_solutions;
+        sorted_solutions.reserve(solutions_with_ec.size());
+        for (auto &item : solutions_with_ec) {
+            sorted_solutions.push_back(std::move(item.solution));
+        }
+        return sorted_solutions;
+    }
+
+    static std::string solution_to_str(const std::unordered_map<Lecture, int, CustomHasher<Lecture>> &solution) {
+        std::string out;
+        for (const auto &item : solution) {
+            if (item.second == 1) {
+                out += item.first.name + " - EC: " + std::to_string(item.first.ec) + " \n";
+            }
+        }
+        return out;
     }
 };
 
 int main() {
-    // TODO create seperate repo for cpp_constraint
     auto problem_wrapper = ProblemWrapper();
     problem_wrapper.define_Problem();
     auto start = std::chrono::high_resolution_clock::now();
-    problem_wrapper.solve_problem();
+    auto solutions = problem_wrapper.solve_problem();
+    auto sorted_solutions = ProblemWrapper::sort_solutions(solutions);
+    for (size_t i = 0; i < 50; ++i) {
+        if (i < sorted_solutions.size()) {
+            auto solution_str = ProblemWrapper::solution_to_str(sorted_solutions[i]);
+            std::cout << solution_str << std::endl;
+        }
+
+    }
     auto finish = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = finish - start;
     std::cout << "Elapsed time: " << elapsed.count() << " s\n";
