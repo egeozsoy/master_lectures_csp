@@ -14,7 +14,6 @@
 #include <algorithm>
 
 
-using Constraints =
 class Domain {
     std::vector<int> hidden;
     std::vector<int> states;
@@ -95,6 +94,19 @@ struct CustomProxyHasher {
     size_t operator()(const Proxy<T> &t) const { return t.index; }
 };
 
+
+template<typename T>
+class Constraint;
+
+template<typename T>
+using Domains = std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>>;
+template<typename T>
+using Constraints = std::vector<std::pair<std::shared_ptr<Constraint<T>>, std::vector<Proxy<T>>>>;
+template<typename T>
+using VConstraints = std::unordered_map<Proxy<T>, std::vector<std::pair<std::shared_ptr<Constraint<T>>, std::vector<Proxy<T>>>>, CustomProxyHasher<T>>;
+template<typename T>
+using Assignments = std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>>;
+
 template<typename T>
 class Constraint {
 public:
@@ -115,18 +127,18 @@ public:
 
     virtual void pre_process(
             const std::vector<Proxy<T>> &vars,
-            const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &domains,
-            std::vector<std::pair<std::shared_ptr<Constraint>, std::vector<Proxy<T>>>> &constraints,
-            std::unordered_map<Proxy<T>, std::vector<std::pair<std::shared_ptr<Constraint>, std::vector<Proxy<T>>>>, CustomProxyHasher<T>> &vconstraints
+            const Domains<T> &domains,
+            Constraints<T> &constraints,
+            VConstraints<T> &vconstraints
     );
 
     virtual bool call(const std::vector<Proxy<T>> &/*unused*/,
-                      const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &/*unused*/,
-                      const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &/*unused*/) const;
+                      const Domains<T> &/*unused*/,
+                      const Assignments<T> &/*unused*/) const;
 
     virtual bool forward_check(const std::vector<Proxy<T>> &vars,
-                               const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &domains,
-                               const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &assignments) const;
+                               const Domains<T> &domains,
+                               const Assignments<T> &assignments) const;
 
     virtual bool func(const std::vector<int> &parms, const std::vector<Proxy<T>> &vars) const;
 
@@ -139,9 +151,9 @@ std::unique_ptr<Constraint<T>> Constraint<T>::clone() {
 
 template<typename T>
 void Constraint<T>::pre_process(const std::vector<Proxy<T>> &vars,
-                                const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &domains,
-                                std::vector<std::pair<std::shared_ptr<Constraint>, std::vector<Proxy<T>>>> &constraints,
-                                std::unordered_map<Proxy<T>, std::vector<std::pair<std::shared_ptr<Constraint>, std::vector<Proxy<T>>>>, CustomProxyHasher<T>> &vconstraints) {
+                                const Domains<T> &domains,
+                                Constraints<T> &constraints,
+                                VConstraints<T> &vconstraints) {
 
     if (vars.size() == 1) {
         auto &variable = vars[0];
@@ -166,15 +178,15 @@ void Constraint<T>::pre_process(const std::vector<Proxy<T>> &vars,
 template<typename T>
 bool
 Constraint<T>::call(const std::vector<Proxy<T>> &/*unused*/,
-                    const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &/*unused*/,
-                    const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &/*unused*/) const {
+                    const Domains<T> &/*unused*/,
+                    const Assignments<T> &/*unused*/) const {
     throw std::logic_error("This function shouldn't be called");
 }
 
 template<typename T>
 bool Constraint<T>::forward_check(const std::vector<Proxy<T>> &vars,
-                                  const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &domains,
-                                  const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &assignments) const {
+                                  const Domains<T> &domains,
+                                  const Assignments<T> &assignments) const {
 
     std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> tmp_assignments = assignments; // This makes copies but keeps function const, not sure if it is the best trade-off
     // We represent unassigned always with -1
@@ -226,14 +238,14 @@ public:
 
     void pre_process(
             const std::vector<Proxy<T>> &vars,
-            const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &domains,
-            std::vector<std::pair<std::shared_ptr<Constraint<T>>, std::vector<Proxy<T>>>> &constraints,
-            std::unordered_map<Proxy<T>, std::vector<std::pair<std::shared_ptr<Constraint<T>>, std::vector<Proxy<T>>>>, CustomProxyHasher<T>> &vconstraints
+            const Domains<T> &domains,
+            Constraints<T> &constraints,
+            VConstraints<T> &vconstraints
     ) override;
 
     bool call(const std::vector<Proxy<T>> &vars,
-              const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &domains,
-              const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &assignments) const override;
+              const Domains<T> &domains,
+              const Assignments<T> &assignments) const override;
 };
 
 template<typename T>
@@ -243,9 +255,9 @@ std::unique_ptr<Constraint<T>> MaxSumConstraint<T>::clone() {
 
 template<typename T>
 void MaxSumConstraint<T>::pre_process(const std::vector<Proxy<T>> &vars,
-                                      const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &domains,
-                                      std::vector<std::pair<std::shared_ptr<Constraint<T>>, std::vector<Proxy<T>>>> &constraints,
-                                      std::unordered_map<Proxy<T>, std::vector<std::pair<std::shared_ptr<Constraint<T>>, std::vector<Proxy<T>>>>, CustomProxyHasher<T>> &vconstraints) {
+                                      const Domains<T> &domains,
+                                      Constraints<T> &constraints,
+                                      VConstraints<T> &vconstraints) {
     Constraint<T>::pre_process(vars, domains, constraints, vconstraints);
     auto maxsum = max_sum;
     // Eliminate any variable that would on its own be bigger than the limit
@@ -261,8 +273,8 @@ void MaxSumConstraint<T>::pre_process(const std::vector<Proxy<T>> &vars,
 
 template<typename T>
 bool MaxSumConstraint<T>::call(const std::vector<Proxy<T>> &vars,
-                               const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &domains,
-                               const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &assignments) const {
+                               const Domains<T> &domains,
+                               const Assignments<T> &assignments) const {
     auto total_sum = 0;
     for (const auto &variable : vars) {
         if (assignments.find(variable) != assignments.end()) { // If variable in assignments
@@ -295,8 +307,8 @@ public:
     std::unique_ptr<Constraint<T>> clone() override;
 
     bool call(const std::vector<Proxy<T>> &vars,
-              const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &domains,
-              const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &assignments) const override;
+              const Domains<T> &domains,
+              const Assignments<T> &assignments) const override;
 
     bool func(const std::vector<int> &parms, const std::vector<Proxy<T>> &vars) const override;
 
@@ -310,8 +322,8 @@ std::unique_ptr<Constraint<T>> FunctionConstraint<T>::clone() {
 
 template<typename T>
 bool FunctionConstraint<T>::call(const std::vector<Proxy<T>> &vars,
-                                 const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &domains,
-                                 const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &assignments) const {
+                                 const Domains<T> &domains,
+                                 const Assignments<T> &assignments) const {
 
     std::vector<int> parms;
     for (const auto &item : vars) {
@@ -349,8 +361,8 @@ public:
 
 private:
     std::tuple<Proxy<T>, std::vector<int>, bool> pushback_domains(const std::vector<std::tuple<int, int, Proxy<T>>> &lst,
-                                                                  const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &assignments,
-                                                                  const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &domains,
+                                                                  const Assignments<T> &assignments,
+                                                                  const Domains<T> &domains,
                                                                   std::vector<std::shared_ptr<Domain>> &pushdomains);
 
     std::tuple<Proxy<T>, std::vector<int>, std::vector<std::shared_ptr<Domain>>, bool>
@@ -363,8 +375,8 @@ private:
 
 template<typename T>
 std::tuple<Proxy<T>, std::vector<int>, bool> BacktrackingSolver<T>::pushback_domains(const std::vector<std::tuple<int, int, Proxy<T>>> &lst,
-                                                                                     const std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &assignments,
-                                                                                     const std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> &domains,
+                                                                                     const Assignments<T> &assignments,
+                                                                                     const Domains<T> &domains,
                                                                                      std::vector<std::shared_ptr<Domain>> &pushdomains
 ) {
     for (const auto &item : lst) {
@@ -387,7 +399,7 @@ std::tuple<Proxy<T>, std::vector<int>, bool> BacktrackingSolver<T>::pushback_dom
 
 template<typename T>
 std::tuple<Proxy<T>, std::vector<int>, std::vector<std::shared_ptr<Domain>>, bool>
-BacktrackingSolver<T>::deal_values_empty(std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> &assignments,
+BacktrackingSolver<T>::deal_values_empty(Assignments<T> &assignments,
                                          std::vector<std::tuple<Proxy<T>, std::vector<int>, std::vector<std::shared_ptr<Domain>>>> &queue) {
     auto &dummy_last_element = queue.back();
     auto dummy_variable = std::get<0>(dummy_last_element);
@@ -445,9 +457,9 @@ std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::
         proxies.emplace_back(&original_data, idx);
         ++idx;
     }
-    std::unordered_map<Proxy<T>, std::shared_ptr<Domain>, CustomProxyHasher<T>> domains;
-    std::vector<std::pair<std::shared_ptr<Constraint<T>>, std::vector<Proxy<T>>>> processed_constraints;
-    std::unordered_map<Proxy<T>, std::vector<std::pair<std::shared_ptr<Constraint<T>>, std::vector<Proxy<T>>>>, CustomProxyHasher<T>> processed_vconstraints;
+    Domains<T> domains;
+    Constraints<T> processed_constraints;
+    VConstraints<T> processed_vconstraints;
     for (size_t i = 0; i < problem_args.domains.size(); ++i) {
         domains[proxies[i]] = problem_args.domains.at(original_datas[i]);
     }
@@ -464,7 +476,7 @@ std::vector<std::unordered_map<T, int, CustomHasher<T>>> BacktrackingSolver<T>::
     }
 
     std::vector<std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>>> solutions;
-    std::unordered_map<Proxy<T>, int, CustomProxyHasher<T>> assignments;
+    Assignments<T> assignments;
     std::vector<std::tuple<Proxy<T>, std::vector<int>, std::vector<std::shared_ptr<Domain>>>> queue;
     std::vector<std::tuple<int, int, Proxy<T>>> lst;
     std::vector<std::shared_ptr<Domain>> pushdomains;

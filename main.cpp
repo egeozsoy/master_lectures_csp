@@ -13,7 +13,6 @@
 using std::string;
 using std::vector;
 
-
 class AreaConstraint : public FunctionConstraint<Lecture> {
     std::unordered_map<string, int> taken_areas;
     std::unordered_set<string> preferred_areas;
